@@ -22,11 +22,13 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandler;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultFileRegion;
 import io.netty.channel.FileRegion;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.util.internal.ThreadLocalRandom;
+import io.netty.util.internal.PlatformDependent;
+import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
 import java.io.File;
@@ -45,7 +47,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
     static final byte[] data = new byte[1048576 * 10];
 
     static {
-        ThreadLocalRandom.current().nextBytes(data);
+        PlatformDependent.threadLocalRandom().nextBytes(data);
     }
 
     @Test
@@ -73,6 +75,11 @@ public class SocketFileRegionTest extends AbstractSocketTest {
         run();
     }
 
+    @Test
+    public void testFileRegionCountLargerThenFile() throws Throwable {
+        run();
+    }
+
     public void testFileRegion(ServerBootstrap sb, Bootstrap cb) throws Throwable {
         testFileRegion0(sb, cb, false, true, true);
     }
@@ -93,6 +100,34 @@ public class SocketFileRegionTest extends AbstractSocketTest {
         testFileRegion0(sb, cb, true, false, true);
     }
 
+    public void testFileRegionCountLargerThenFile(ServerBootstrap sb, Bootstrap cb) throws Throwable {
+        File file = File.createTempFile("netty-", ".tmp");
+        file.deleteOnExit();
+
+        final FileOutputStream out = new FileOutputStream(file);
+        out.write(data);
+        out.close();
+
+        sb.childHandler(new SimpleChannelInboundHandler<ByteBuf>() {
+            @Override
+            protected void channelRead0(ChannelHandlerContext ctx, ByteBuf msg) {
+                // Just drop the message.
+            }
+        });
+        cb.handler(new ChannelInboundHandlerAdapter());
+
+        Channel sc = sb.bind().sync().channel();
+        Channel cc = cb.connect(sc.localAddress()).sync().channel();
+
+        // Request file region which is bigger then the underlying file.
+        FileRegion region = new DefaultFileRegion(
+                new FileInputStream(file).getChannel(), 0, data.length + 1024);
+
+        assertThat(cc.writeAndFlush(region).await().cause(), CoreMatchers.<Throwable>instanceOf(IOException.class));
+        cc.close().sync();
+        sc.close().sync();
+    }
+
     private static void testFileRegion0(
             ServerBootstrap sb, Bootstrap cb, boolean voidPromise, final boolean autoRead, boolean defaultFileRegion)
             throws Throwable {
@@ -104,7 +139,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
         file.deleteOnExit();
 
         final FileOutputStream out = new FileOutputStream(file);
-        final Random random = ThreadLocalRandom.current();
+        final Random random = PlatformDependent.threadLocalRandom();
 
         // Prepend random data which will not be transferred, so that we can test non-zero start offset
         final int startOffset = random.nextInt(8192);
@@ -146,7 +181,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
 
         Channel sc = sb.bind().sync().channel();
 
-        Channel cc = cb.connect().sync().channel();
+        Channel cc = cb.connect(sc.localAddress()).sync().channel();
         FileRegion region = new DefaultFileRegion(
                 new FileInputStream(file).getChannel(), startOffset, data.length - bufferSize);
         FileRegion emptyRegion = new DefaultFileRegion(new FileInputStream(file).getChannel(), 0, 0);
@@ -265,7 +300,7 @@ public class SocketFileRegionTest extends AbstractSocketTest {
         @Override
         @Deprecated
         public long transfered() {
-            return region.transfered();
+            return region.transferred();
         }
 
         @Override

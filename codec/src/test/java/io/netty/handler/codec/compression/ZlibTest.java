@@ -22,12 +22,13 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.EmptyArrays;
-import io.netty.util.internal.ThreadLocalRandom;
+import io.netty.util.internal.PlatformDependent;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Random;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -82,7 +83,7 @@ public abstract class ZlibTest {
             "</body></html>").getBytes(CharsetUtil.UTF_8);
 
     static {
-        ThreadLocalRandom rand = ThreadLocalRandom.current();
+        Random rand = PlatformDependent.threadLocalRandom();
         rand.nextBytes(BYTES_SMALL);
         rand.nextBytes(BYTES_LARGE);
     }
@@ -222,7 +223,7 @@ public abstract class ZlibTest {
     // Test for https://github.com/netty/netty/issues/2572
     private void testDecompressOnly(ZlibWrapper decoderWrapper, byte[] compressed, byte[] data) throws Exception {
         EmbeddedChannel chDecoder = new EmbeddedChannel(createDecoder(decoderWrapper));
-        chDecoder.writeInbound(Unpooled.wrappedBuffer(compressed));
+        chDecoder.writeInbound(Unpooled.copiedBuffer(compressed));
         assertTrue(chDecoder.finish());
 
         ByteBuf decoded = Unpooled.buffer(data.length);
@@ -235,7 +236,7 @@ public abstract class ZlibTest {
             decoded.writeBytes(buf);
             buf.release();
         }
-        assertEquals(Unpooled.wrappedBuffer(data), decoded);
+        assertEquals(Unpooled.copiedBuffer(data), decoded);
         decoded.release();
     }
 

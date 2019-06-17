@@ -55,7 +55,7 @@ abstract class ByteBufChecksum implements Checksum {
         if (PlatformDependent.javaVersion() >= 8) {
             try {
                 Method method = checksum.getClass().getDeclaredMethod("update", ByteBuffer.class);
-                method.invoke(method, ByteBuffer.allocate(1));
+                method.invoke(checksum, ByteBuffer.allocate(1));
                 return method;
             } catch (Throwable ignore) {
                 return null;
@@ -76,7 +76,7 @@ abstract class ByteBufChecksum implements Checksum {
     }
 
     /**
-     * @see {@link #update(byte[], int, int)}.
+     * @see #update(byte[], int, int)
      */
     public void update(ByteBuf b, int off, int len) {
         if (b.hasArray()) {
